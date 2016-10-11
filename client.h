@@ -153,7 +153,7 @@ protected:
     run_stats m_stats;
 
     // pipeline management
-    enum request_type { rt_unknown, rt_set, rt_get, rt_wait,rt_auth, rt_select_db };
+    enum request_type { rt_unknown, rt_set, rt_get, rt_ignore,rt_wait,rt_auth, rt_select_db };
     struct request {
         request_type m_type;
         struct timeval m_sent_time;

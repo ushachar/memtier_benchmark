@@ -155,6 +155,8 @@ public:
     virtual int write_command_set(const char *key, int key_len, const char *value, int value_len, int expiry, unsigned int offset);
     virtual int write_command_get(const char *key, int key_len, unsigned int offset);
     virtual int write_command_multi_get(const keylist *keylist);
+    virtual int write_command_watch(const char *key, int key_len);
+    virtual int write_command_unwatch();
     virtual int write_command_wait(unsigned int num_slaves, unsigned int timeout);
     virtual int parse_response(void);
 };
@@ -307,6 +309,31 @@ static int get_number_length(unsigned int num)
     if (num < 100000000) return 8;
     if (num < 1000000000) return 9;
     return 10;
+}
+
+int redis_protocol::write_command_watch(const char *key, int key_len)
+{
+    int size = 0;
+    size = evbuffer_add_printf(m_write_buf,
+                               "*2\r\n"
+                               "$5\r\n"
+                               "WATCH\r\n"
+                               "$%u\r\n", key_len);
+    evbuffer_add(m_write_buf, key, key_len);
+    evbuffer_add(m_write_buf, "\r\n", 2);
+    size += key_len + 2;
+
+    return size;
+}
+
+int redis_protocol::write_command_unwatch()
+{
+    int size = 0;
+    size = evbuffer_add_printf(m_write_buf,
+                                "*1\r\n"
+                                "$7\r\n"
+                                "UNWATCH\r\n");
+    return size;
 }
 
 int redis_protocol::write_command_wait(unsigned int num_slaves, unsigned int timeout)

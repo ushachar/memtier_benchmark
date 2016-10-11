@@ -515,8 +515,26 @@ void client::create_request(void)
                                   ((m_config->wait_timeout.max - m_config->wait_timeout.min)/2.0) + m_config->wait_timeout.min);
 
         benchmark_debug_log("WAIT num_slaves=%u timeout=%u\n", num_slaves, timeout);
+
+        // 'special' WAIT workaround
+        data_object *obj = m_obj_gen->get_object(obj_iter_type(m_config, 0));
+        unsigned int key_len;
+        const char *key = obj->get_key(&key_len);
+        unsigned int value_len;
+        const char *value = obj->get_value(&value_len);
+
+        cmd_size = m_protocol->write_command_watch(key, key_len);
+        m_pipeline.push(new client::request(rt_ignore, cmd_size, NULL, 0));
+
+        cmd_size = m_protocol->write_command_set(key, key_len, value, value_len,
+            obj->get_expiry(), m_config->data_offset);
+        m_pipeline.push(new client::request(rt_ignore, cmd_size, NULL, 1));
+
         cmd_size = m_protocol->write_command_wait(num_slaves, timeout);
         m_pipeline.push(new client::request(rt_wait, cmd_size, NULL, 0));
+
+        cmd_size = m_protocol->write_command_unwatch();
+        m_pipeline.push(new client::request(rt_ignore, cmd_size, NULL, 0));
     }
     // are we set or get? this depends on the ratio
     else if (m_set_ratio_count < m_config->ratio.a) {
@@ -648,6 +666,9 @@ void client::handle_response(request *request, protocol_response *response)
             m_stats.update_set_op(NULL,
                 request->m_size + response->get_total_len(),
                 ts_diff_now(request->m_sent_time));
+            break;
+        case rt_ignore:
+            // Hack to ignore WATCH/SET/UNWATCH component of special WAIT
             break;
         case rt_wait:
             m_stats.update_wait_op(NULL,
